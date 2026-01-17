@@ -13,6 +13,8 @@
     import PriorityEditor from './PriorityEditor.svelte';
     import RecurrenceEditor from './RecurrenceEditor.svelte';
     import StatusEditor from './StatusEditor.svelte';
+    import type { App, TFile } from 'obsidian';
+    import { SuggestModal } from 'obsidian';
 
     // These exported variables are passed in as props by TaskModal.onOpen():
     export let app: App; // <-- AJOUT
