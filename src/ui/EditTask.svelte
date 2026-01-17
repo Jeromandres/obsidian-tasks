@@ -15,6 +15,7 @@
     import StatusEditor from './StatusEditor.svelte';
 
     // These exported variables are passed in as props by TaskModal.onOpen():
+    export let app: App; // <-- AJOUT
     export let task: Task;
     export let onSubmit: (updatedTasks: Task[]) => void | Promise<void>;
     export let statusOptions: Status[];
@@ -101,6 +102,147 @@
         const newTasks = await editableTask.applyEdits(task, allTasks);
         onSubmit(newTasks);
     };
+
+    type Trigger =
+    | { kind: 'link'; from: number; to: number; query: string }
+    | { kind: 'tag'; from: number; to: number; query: string };
+
+    function _findTrigger(text: string, cursor: number): Trigger | null {
+        const before = text.slice(0, cursor);
+        const windowStart = Math.max(0, before.length - 300);
+        const w = before.slice(windowStart);
+    
+        // [[ ... (not yet closed)
+        const linkIdx = w.lastIndexOf('[[');
+        if (linkIdx >= 0) {
+            const after = w.slice(linkIdx + 2);
+            if (!after.includes(']]')) {
+                return { kind: 'link', from: windowStart + linkIdx, to: cursor, query: after };
+            }
+        }
+    
+        // #tag (with a reasonable boundary)
+        const m = w.match(/(^|[\s([{"'.,;:!?])#([^\s#()[\]{}"',;:!?]*)$/);
+        if (m) {
+            const hashPos = w.lastIndexOf('#');
+            return { kind: 'tag', from: windowStart + hashPos, to: cursor, query: m[2] ?? '' };
+        }
+    
+        return null;
+    }
+    
+    function _replaceRange(value: string, from: number, to: number, insert: string) {
+        return value.slice(0, from) + insert + value.slice(to);
+    }
+    
+    class _LinkSuggestModal extends SuggestModal<TFile> {
+        constructor(app: App, private files: TFile[]) {
+            super(app);
+            this.setPlaceholder('Lien…');
+        }
+        getSuggestions(query: string): TFile[] {
+            const q = (query ?? '').toLowerCase();
+            const hits = q
+                ? this.files.filter((f) => f.basename.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
+                : this.files;
+            return hits.slice(0, 50);
+        }
+        renderSuggestion(file: TFile, el: HTMLElement) {
+            el.createDiv({ text: file.path });
+        }
+        onChooseSuggestion(file: TFile) {
+            this.onChoose?.(file);
+        }
+        onChoose?: (file: TFile) => void;
+    }
+    
+    class _TagSuggestModal extends SuggestModal<string> {
+        constructor(app: App, private tags: string[]) {
+            super(app);
+            this.setPlaceholder('Tag…');
+        }
+        getSuggestions(query: string): string[] {
+            const q = (query ?? '').toLowerCase();
+            const hits = q ? this.tags.filter((t) => t.toLowerCase().includes(q)) : this.tags;
+            return hits.slice(0, 50);
+        }
+        renderSuggestion(tag: string, el: HTMLElement) {
+            el.createDiv({ text: `#${tag}` });
+        }
+        onChooseSuggestion(tag: string) {
+            this.onChoose?.(tag);
+        }
+        onChoose?: (tag: string) => void;
+    }
+    
+    let _isSuggestOpen = false;
+    
+    function _getAllTags(): string[] {
+        const raw = app.metadataCache.getTags() ?? {};
+        return Object.keys(raw).map((t) => (t.startsWith('#') ? t.slice(1) : t));
+    }
+    
+    function _openSuggestForDescriptionIfNeeded(e: KeyboardEvent) {
+        if (_isSuggestOpen) return;
+    
+        // déclenchement keyup demandé, filtrage touches non-textes
+        if (e.key.length > 1 && e.key !== 'Backspace') return;
+    
+        if (!descriptionInput) return;
+    
+        const cursor = descriptionInput.selectionStart ?? 0;
+        const trig = _findTrigger(descriptionInput.value, cursor);
+        if (!trig) return;
+    
+        _isSuggestOpen = true;
+    
+        if (trig.kind === 'link') {
+            const modal = new _LinkSuggestModal(app, app.vault.getMarkdownFiles());
+            modal.setInputValue(trig.query);
+            modal.onChoose = (file) => {
+                const insert = `[[${file.basename}]]`; // <-- choix acté
+                const newVal = _replaceRange(descriptionInput.value, trig.from, trig.to, insert);
+                const newCursor = trig.from + insert.length;
+    
+                editableTask.description = newVal; // <-- important: Svelte store la vérité ici
+                // le bind:value mettra à jour le textarea, mais on recale aussi le curseur
+                setTimeout(() => {
+                    descriptionInput.setSelectionRange(newCursor, newCursor);
+                    descriptionInput.focus();
+                }, 0);
+            };
+            modal.onClose = () => {
+                _isSuggestOpen = false;
+                descriptionInput?.focus();
+            };
+            modal.open();
+            return;
+        }
+    
+        if (trig.kind === 'tag') {
+            const modal = new _TagSuggestModal(app, _getAllTags());
+            modal.setInputValue(trig.query);
+            modal.onChoose = (tag) => {
+                const insert = `#${tag}`;
+                const newVal = _replaceRange(descriptionInput.value, trig.from, trig.to, insert);
+                const newCursor = trig.from + insert.length;
+    
+                editableTask.description = newVal;
+                setTimeout(() => {
+                    descriptionInput.setSelectionRange(newCursor, newCursor);
+                    descriptionInput.focus();
+                }, 0);
+            };
+            modal.onClose = () => {
+                _isSuggestOpen = false;
+                descriptionInput?.focus();
+            };
+            modal.open();
+            return;
+        }
+    
+        _isSuggestOpen = false;
+    }
 </script>
 
 <!--
@@ -151,6 +293,7 @@ Availability of access keys:
             placeholder="Take out the trash"
             accesskey={accesskey('t')}
             on:keydown={_onDescriptionKeyDown}
+            on:keyup={_openSuggestForDescriptionIfNeeded}
             on:paste={_removeLinebreaksFromDescription}
             on:drop={_removeLinebreaksFromDescription}
         />
