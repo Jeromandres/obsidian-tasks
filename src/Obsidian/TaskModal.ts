@@ -62,6 +62,7 @@ export class TaskModal extends Modal {
         new EditTask({
             target: contentEl,
             props: {
+                app: this.app, // <-- AJOUT
                 task: this.task,
                 statusOptions: statusOptions,
                 onSubmit: this.onSubmit,
