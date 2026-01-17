@@ -1,6 +1,7 @@
 /**
  * @jest-environment jsdom
  */
+import type { App } from "obsidian";
 import { type RenderResult, fireEvent, render } from '@testing-library/svelte';
 import moment from 'moment';
 import { taskFromLine } from '../../src/Commands/CreateOrEditTaskParser';
@@ -45,8 +46,18 @@ function constructSerialisingOnSubmit(task: Task) {
     return { waitForClose, onSubmit };
 }
 
+const mockApp = {
+  vault: {
+    getMarkdownFiles: () => [],
+  },
+  metadataCache: {
+    getFileCache: () => null,
+  },
+} as unknown as App;
+
 function renderAndCheckModal(task: Task, onSubmit: (updatedTasks: Task[]) => void, allTasks = [task]) {
     const result: RenderResult<EditTask> = render(EditTask, {
+        app: mockApp,
         task,
         statusOptions: StatusRegistry.getInstance().registeredStatuses,
         onSubmit,
