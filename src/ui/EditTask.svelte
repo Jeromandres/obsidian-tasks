@@ -156,6 +156,16 @@
             this.onChoose?.(file);
         }
         onChoose?: (file: TFile) => void;
+
+        public setQuery(query: string) {
+          // SuggestModal a bien inputEl au runtime, mais les typings peuvent être incomplets
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const self: any = this;
+          if (self.inputEl) {
+            self.inputEl.value = query;
+            self.inputEl.dispatchEvent(new Event("input"));
+          }
+        }
     }
     
     class _TagSuggestModal extends SuggestModal<string> {
@@ -175,13 +185,33 @@
             this.onChoose?.(tag);
         }
         onChoose?: (tag: string) => void;
+
+        public setQuery(query: string) {
+          // SuggestModal a bien inputEl au runtime, mais les typings peuvent être incomplets
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const self: any = this;
+          if (self.inputEl) {
+            self.inputEl.value = query;
+            self.inputEl.dispatchEvent(new Event("input"));
+          }
+        }
     }
     
     let _isSuggestOpen = false;
     
     function _getAllTags(): string[] {
-        const raw = app.metadataCache.getTags() ?? {};
-        return Object.keys(raw).map((t) => (t.startsWith('#') ? t.slice(1) : t));
+      const tags = new Set<string>();
+    
+      for (const file of app.vault.getMarkdownFiles()) {
+        const cache = app.metadataCache.getFileCache(file);
+        const rawTags = cache?.tags ?? [];
+        for (const t of rawTags) {
+          const tag = (t.tag ?? "").replace(/^#/, "");
+          if (tag) tags.add(tag);
+        }
+      }
+    
+      return [...tags].sort();
     }
     
     function _openSuggestForDescriptionIfNeeded(e: KeyboardEvent) {
@@ -200,7 +230,7 @@
     
         if (trig.kind === 'link') {
             const modal = new _LinkSuggestModal(app, app.vault.getMarkdownFiles());
-            modal.setInputValue(trig.query);
+            modal.setQuery(trig.query);
             modal.onChoose = (file) => {
                 const insert = `[[${file.basename}]]`; // <-- choix acté
                 const newVal = _replaceRange(descriptionInput.value, trig.from, trig.to, insert);
@@ -223,7 +253,7 @@
     
         if (trig.kind === 'tag') {
             const modal = new _TagSuggestModal(app, _getAllTags());
-            modal.setInputValue(trig.query);
+            modal.setQuery(trig.query);
             modal.onChoose = (tag) => {
                 const insert = `#${tag}`;
                 const newVal = _replaceRange(descriptionInput.value, trig.from, trig.to, insert);
