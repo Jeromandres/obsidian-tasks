@@ -14,7 +14,8 @@
     import RecurrenceEditor from './RecurrenceEditor.svelte';
     import StatusEditor from './StatusEditor.svelte';
     import type { App, TFile } from 'obsidian';
-    // import { SuggestModal } from 'obsidian';
+    import { SuggestModal as ObsidianSuggestModal } from 'obsidian';
+
 
     // These exported variables are passed in as props by TaskModal.onOpen():
     export let app: App; // <-- AJOUT
@@ -22,6 +23,17 @@
     export let onSubmit: (updatedTasks: Task[]) => void | Promise<void>;
     export let statusOptions: Status[];
     export let allTasks: Task[];
+
+    // En runtime Obsidian, SuggestModal est présent.
+    // En tests, le mock peut ne pas l'exporter : fallback minimal pour éviter "extends undefined".
+    const SuggestModal: any =
+      ObsidianSuggestModal ??
+      class {
+        constructor(_app: unknown) {}
+        setPlaceholder(_text: string) {}
+        open() {}
+        close() {}
+      };
 
     const {
         // NEW_TASK_FIELD_EDIT_REQUIRED
