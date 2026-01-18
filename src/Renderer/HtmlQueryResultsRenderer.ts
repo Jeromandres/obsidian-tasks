@@ -189,7 +189,9 @@ export class HtmlQueryResultsRenderer extends QueryResultsRendererBase {
     }
 
     private addUrgency(listItem: HTMLElement, task: Task) {
-        const text = Number.isFinite(task.urgency) ? task.urgency.toFixed(2) : String(task.urgency);
+        const text = new Intl.NumberFormat('en-US', {
+            maximumFractionDigits: 3,
+            }).format(task.urgency);
         const span = createAndAppendElement('span', listItem);
         span.textContent = text;
         span.classList.add('tasks-urgency');
